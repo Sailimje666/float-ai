@@ -1,0 +1,16 @@
+{
+  "app\\page.tsx -> @/components/OceanMap": {
+    "id": 88859,
+    "files": [
+      "static/css/857aa62baa17c894.css",
+      "static/chunks/d0deef33.414f5e0355024f0b.js",
+      "static/chunks/859.6204957f4e3b09ee.js"
+    ]
+  },
+  "components\\chat-interface.tsx -> netcdfjs": {
+    "id": 93496,
+    "files": [
+      "static/chunks/496.ef15ef3cd9bafe3c.js"
+    ]
+  }
+}
