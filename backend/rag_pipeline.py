@@ -281,6 +281,14 @@ class RagPipeline:
         sql = self.nl2sql(question)
         df = self.execute_sql(sql)
         summary = self.summarize(question, df)
+        # Log the interaction to DuckDB 'queries' table (best-effort)
+        try:
+            self.con.execute(
+                "INSERT INTO queries (question, sql, rows) VALUES (?, ?, ?);",
+                [question, sql, int(len(df))],
+            )
+        except Exception as e:
+            print(f"[{_ts()}] [v0] Query logging failed: {e}")
         return {
             "question": question,
             "hints": hints,
