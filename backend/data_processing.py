@@ -61,6 +61,17 @@ class DataIngestor:
             );
             """
         )
+        # Query logging table for RAG interactions
+        self.con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS queries (
+                ts TIMESTAMP DEFAULT current_timestamp,
+                question VARCHAR,
+                sql VARCHAR,
+                rows BIGINT
+            );
+            """
+        )
         # Lightweight indexes; spatial index may be a no-op depending on build
         try:
             self.con.execute("CREATE INDEX IF NOT EXISTS idx_profiles_time ON profiles(time);")

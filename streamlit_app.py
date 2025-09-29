@@ -2,7 +2,7 @@
 Argo AI Ocean Assistant - Streamlit Application
 Converted from Next.js to Streamlit for oceanographic data visualization and analysis.
 """
-print("Hello from Awadhoot!")
+
 
 import streamlit as st
 import pandas as pd
@@ -20,6 +20,7 @@ import base64
 from typing import List, Dict, Any, Optional, Tuple
 import os
 import sys
+import duckdb
 
 # Add backend to path for imports
 sys.path.append(os.path.join(os.path.dirname(__file__), 'backend'))
@@ -38,7 +39,7 @@ st.set_page_config(
     page_title="Argo AI Ocean Assistant",
     page_icon="🌊",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
 # Professional Modern Dashboard Theme
@@ -1270,7 +1271,25 @@ def create_profile_chart(floats: List[Dict], variable: str, title: str = None):
         return fig
         
     except Exception as e:
-        # Return error figure instead of None
+        # Fallback: try a minimal Plotly Express figure
+        try:
+            import plotly.express as px
+            rows = []
+            for i, float_data in enumerate(floats or []):
+                profile = (float_data or {}).get("profiles", [{}])[0] if float_data.get("profiles") else {}
+                depth_data = profile.get("depth", [])
+                var_data = profile.get(variable, [])
+                name = float_data.get("name", f"Float {i+1}")
+                for d, v in zip(depth_data, var_data):
+                    rows.append({"Depth (m)": -float(d), variable.title(): float(v), "Float": name})
+            if rows:
+                dfm = pd.DataFrame(rows)
+                fig = px.line(dfm, x=variable.title(), y="Depth (m)", color="Float", template="plotly_dark")
+                fig.update_layout(title=title or f"{variable.title()} Profiles")
+                return fig
+        except Exception:
+            pass
+        # Return simple error figure as last resort
         fig = go.Figure()
         fig.update_layout(
             title="Error Creating Chart",
@@ -1714,83 +1733,12 @@ def main():
     </div>
     """, unsafe_allow_html=True)
     
-    # Sidebar
-    with st.sidebar:
-        # Mobile menu toggle (hidden on desktop)
-        st.markdown("""
-        <div class="mobile-menu-toggle" style="display: none;">
-            <button onclick="toggleSidebar()" style="
-                background: #14B8A6;
-                color: white;
-                border: none;
-                padding: 0.5rem 1rem;
-                border-radius: 8px;
-                cursor: pointer;
-                font-size: 14px;
-                margin-bottom: 1rem;
-            ">☰ Menu</button>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.header("Ocean Data Assistant")
-        
-        # AI Status
-        ai_status = st.session_state.ai_status
-        if ai_status["aiEnhanced"]:
-            st.success(f"🤖 Enhanced AI ({ai_status['provider']})")
-        else:
-            st.info(f"🤖 Demo Mode ({ai_status['provider']})")
-        
-        st.markdown("---")
-        
-        # Sample Queries
-        st.subheader("💡 Try These Queries")
-        for query in SAMPLE_QUERIES[:6]:
-            if st.button(query, key=f"sample_{query}", use_container_width=True):
-                process_query(query)
-        
-        st.markdown("---")
-        
-        # File Upload
-        st.subheader("📁 Upload NetCDF File")
-        uploaded_file = st.file_uploader(
-            "Choose a .nc file",
-            type=['nc'],
-            help="Upload NetCDF files for analysis"
-        )
-        
-        if uploaded_file is not None:
-            st.session_state.netcdf_summary = {
-                "filename": uploaded_file.name,
-                "size": uploaded_file.size
-            }
-            st.success(f"✅ Loaded: {uploaded_file.name}")
-        
-        # Quick Actions
-        st.markdown("---")
-        st.subheader("⚡ Quick Actions")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button("📍 Float Map", use_container_width=True):
-                process_query("Show me all float locations")
-        with col2:
-            if st.button("🌡️ Temperature", use_container_width=True):
-                process_query("Compare temperature profiles")
-        
-        col3, col4 = st.columns(2)
-        with col3:
-            if st.button("🧂 Salinity", use_container_width=True):
-                process_query("Show salinity data")
-        with col4:
-            if st.button("📊 Analysis", use_container_width=True):
-                process_query("Show comprehensive oceanographic analysis")
+    # Top Navbar (tabs)
+    tabs = st.tabs(["💬 Chat", "📊 Visualizations", "📝 Recent Queries", "⚙️ Tools"])
     
     # Main content area
-    col1, col2 = st.columns([2, 1])
-    
-    with col1:
-        # Chat Interface
+    # Tab: Chat
+    with tabs[0]:
         st.subheader("💬 Chat Interface")
         
         # Display messages
@@ -1843,9 +1791,28 @@ def main():
             if st.button("Clear Chat", use_container_width=True):
                 st.session_state.messages = []
                 st.rerun()
-    
-    with col2:
-        # Visualization Panel
+        # Inline visualization preview inside chat (if available)
+        if st.session_state.current_visualization:
+            viz_data = st.session_state.current_visualization
+            st.markdown("---")
+            st.subheader("🔎 Preview")
+            try:
+                if viz_data.get("type") in ["profile", "comparison"] and viz_data.get("floats"):
+                    variable = viz_data.get("variable", "temperature")
+                    chart = create_profile_chart(viz_data["floats"], variable, f"{variable.title()} Preview")
+                    st.plotly_chart(chart, use_container_width=True)
+                elif viz_data.get("type") == "map" and viz_data.get("floats"):
+                    map_obj = create_float_map(viz_data["floats"], viz_data.get("showTrajectories", False), "Map Preview")
+                    if map_obj:
+                        st_folium(map_obj, width=700, height=420)
+                elif viz_data.get("type") == "ts_diagram" and viz_data.get("floats"):
+                    ts_chart = create_temperature_salinity_diagram(viz_data["floats"])
+                    st.plotly_chart(ts_chart, use_container_width=True)
+            except Exception as e:
+                st.warning(f"Preview error: {e}")
+
+    # Tab: Visualizations
+    with tabs[1]:
         st.subheader("📊 Visualizations")
         
         if st.session_state.current_visualization:
@@ -1969,15 +1936,60 @@ def main():
         # Anomaly Chart
         st.markdown("---")
         st.subheader("🚨 Anomaly Detection")
-        st.plotly_chart(
-            create_anomaly_chart(SAMPLE_DATA),
-            use_container_width=True
-        )
-        
+        st.plotly_chart(create_anomaly_chart(SAMPLE_DATA), use_container_width=True)
+
         # AI Insight
         st.markdown("---")
         st.subheader("🤖 AI Insight")
         st.info("Map pe click karo to insight dikhai dega." if not st.session_state.current_visualization else "Analysis complete. Check the visualizations above for insights.")
+
+    # Tab: Recent Queries
+    with tabs[2]:
+        st.subheader("📝 Recent Queries")
+        if BACKEND_AVAILABLE:
+            df_q = fetch_recent_queries(50)
+            if not df_q.empty:
+                df_display = df_q.copy()
+                df_display["sql"] = df_display["sql"].apply(lambda s: (s[:160] + "…") if isinstance(s, str) and len(s) > 160 else s)
+                st.dataframe(df_display, use_container_width=True, height=420)
+            else:
+                st.info("No queries logged yet. Use the Chat tab to ask something.")
+        else:
+            st.info("Backend unavailable; query log not accessible in demo mode.")
+
+    # Tab: Tools (Sample Queries, Upload, Quick Actions)
+    with tabs[3]:
+        st.subheader("⚙️ Tools")
+        st.markdown("---")
+        st.subheader("💡 Try These Queries")
+        cols = st.columns(3)
+        for i, query in enumerate(SAMPLE_QUERIES[:9]):
+            with cols[i % 3]:
+                if st.button(query, key=f"sample_{query}", use_container_width=True):
+                    process_query(query)
+        
+        st.markdown("---")
+        st.subheader("📁 Upload NetCDF File")
+        uploaded_file = st.file_uploader("Choose a .nc file", type=['nc'], help="Upload NetCDF files for analysis")
+        if uploaded_file is not None:
+            st.session_state.netcdf_summary = {"filename": uploaded_file.name, "size": uploaded_file.size}
+            st.success(f"✅ Loaded: {uploaded_file.name}")
+
+        st.markdown("---")
+        st.subheader("⚡ Quick Actions")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            if st.button("📍 Float Map", use_container_width=True):
+                process_query("Show me all float locations")
+        with col2:
+            if st.button("🌡️ Temperature", use_container_width=True):
+                process_query("Compare temperature profiles")
+        with col3:
+            if st.button("🧂 Salinity", use_container_width=True):
+                process_query("Show salinity data")
+        with col4:
+            if st.button("📊 Analysis", use_container_width=True):
+                process_query("Show comprehensive oceanographic analysis")
 
 def process_query(query: str):
     """Process user query and add to chat"""
@@ -2004,6 +2016,46 @@ def process_query(query: str):
     
     # Update visualization
     st.session_state.current_visualization = response
+    
+    # Log query into DuckDB 'queries' table too (align with backend logging)
+    try:
+        if BACKEND_AVAILABLE:
+            cfg = Config()
+            db_path = cfg.duckdb_path if not cfg.in_memory_duckdb else ":memory:"
+        else:
+            db_path = "data/argo.duckdb"
+        os.makedirs(os.path.dirname(db_path) or "data", exist_ok=True)
+        con = duckdb.connect(db_path)
+        con.execute(
+            """
+            CREATE TABLE IF NOT EXISTS queries (
+                ts TIMESTAMP DEFAULT current_timestamp,
+                question VARCHAR,
+                sql VARCHAR,
+                rows BIGINT
+            );
+            """
+        )
+        # For the demo UI path, we don't have backend SQL/rows here; record minimal fields
+        con.execute(
+            "INSERT INTO queries (question, sql, rows) VALUES (?, ?, ?);",
+            [query, None, None],
+        )
+    except Exception:
+        pass
+
+def fetch_recent_queries(limit: int = 20) -> pd.DataFrame:
+    """Fetch recent logged queries from DuckDB 'queries' table."""
+    try:
+        cfg = Config() if BACKEND_AVAILABLE else None
+        db_path = cfg.duckdb_path if (cfg and not cfg.in_memory_duckdb) else "data/argo.duckdb"
+        con = duckdb.connect(db_path if os.path.exists(os.path.dirname(db_path) or "") else db_path)
+        return con.execute(
+            "SELECT ts, question, sql, rows FROM queries ORDER BY ts DESC LIMIT ?",
+            [limit],
+        ).df()
+    except Exception:
+        return pd.DataFrame()
 
 if __name__ == "__main__":
     # Add JavaScript for mobile menu toggle
