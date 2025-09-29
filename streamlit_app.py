@@ -2,6 +2,7 @@
 Argo AI Ocean Assistant - Streamlit Application
 Converted from Next.js to Streamlit for oceanographic data visualization and analysis.
 """
+print("Hello from Awadhoot!")
 
 import streamlit as st
 import pandas as pd
