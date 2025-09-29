@@ -5,6 +5,9 @@ Converted from Next.js to Streamlit for oceanographic data visualization and ana
 
 
 import streamlit as st
+
+st.write("hello limji")
+
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -1721,6 +1724,8 @@ def create_anomaly_chart(data: List[Dict]):
             )]
         )
         return fig
+
+
 
 def main():
     """Main Streamlit application"""
